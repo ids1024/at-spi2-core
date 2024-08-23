@@ -216,6 +216,18 @@ atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
   print_key_definition(libei_device, kd);
 }
 
+static gboolean
+atspi_device_libei_grab_keyboard (AtspiDevice *device)
+{
+  printf("Grab keyboard\n");
+}
+
+static void
+atspi_device_libei_ungrab_keyboard (AtspiDevice *device)
+{
+  printf("Ungrab keyboard\n");
+}
+
 static guint
 atspi_device_libei_map_modifier (AtspiDevice *device, gint keycode)
 {
@@ -297,6 +309,8 @@ atspi_device_libei_finalize (GObject *object)
 
   g_source_remove(priv->source_id);
   ei_unref(priv->ei);
+
+  // TODO xkb, parent class
 }
 
 static void
@@ -331,6 +345,8 @@ atspi_device_libei_class_init (AtspiDeviceLibeiClass *klass)
 
   device_class->add_key_grab = atspi_device_libei_add_key_grab;
   device_class->remove_key_grab = atspi_device_libei_remove_key_grab;
+  device_class->grab_keyboard = atspi_device_libei_grab_keyboard;
+  device_class->ungrab_keyboard = atspi_device_libei_ungrab_keyboard;
   device_class->map_modifier = atspi_device_libei_map_modifier;
   device_class->unmap_modifier = atspi_device_libei_unmap_modifier;
   device_class->get_modifier = atspi_device_libei_get_modifier;
