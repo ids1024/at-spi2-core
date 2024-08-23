@@ -294,8 +294,11 @@ atspi_device_libei_get_modifier (AtspiDevice *device, gint keycode)
 static guint
 atspi_device_libei_get_locked_modifiers (AtspiDevice *device)
 {
-        printf("get locked modifiers\n");
-        return 0;
+  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+
+  printf("get locked modifiers\n");
+  return xkb_state_serialize_mods(priv->xkb_state, XKB_STATE_MODS_LOCKED);
 }
 
 static void
