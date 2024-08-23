@@ -111,6 +111,16 @@ atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
 }
 
 static void
+atspi_device_libei_finalize (GObject *object)
+{
+  AtspiDeviceLibei *device = ATSPI_DEVICE_LIBEI (object);
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+
+  g_source_remove(priv->source_id);
+  ei_unref(priv->ei);
+}
+
+static void
 atspi_device_libei_init (AtspiDeviceLibei *device)
 {
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
@@ -126,9 +136,11 @@ static void
 atspi_device_libei_class_init (AtspiDeviceLibeiClass *klass)
 {
   AtspiDeviceClass *device_class = ATSPI_DEVICE_CLASS (klass);
+  GObjectClass *object_class = (GObjectClass *) klass;
 
   device_class->add_key_grab = atspi_device_libei_add_key_grab;
   device_class->remove_key_grab = atspi_device_libei_remove_key_grab;
+  object_class->finalize = atspi_device_libei_finalize;
 }
 
 AtspiDeviceLibei *
