@@ -44,6 +44,8 @@ static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
   if (!(condition & G_IO_IN))
     return TRUE;
 
+  printf("DISPATCH\n");
+
   struct ei_event *event;
 
   ei_dispatch(priv->ei);
@@ -53,7 +55,12 @@ static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
   struct xkb_state *xkb_state = NULL;
 
   while ((event = ei_get_event(priv->ei)) != NULL) {
+    printf("EVENT %d\n", ei_event_get_type(event));
     switch (ei_event_get_type(event)) {
+      case EI_EVENT_SEAT_ADDED:
+        printf("BIND\n");
+	ei_seat_bind_capabilities(ei_event_get_seat(event), EI_DEVICE_CAP_KEYBOARD, NULL);
+	break;
       // TODO multiple devices
       case EI_EVENT_DEVICE_ADDED:
         struct ei_keymap *keymap = ei_device_keyboard_get_keymap(ei_event_get_device(event));
@@ -64,6 +71,7 @@ static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
         xkb_keymap = xkb_keymap_new_from_buffer(xkb_context, buffer, size, format, XKB_KEYMAP_COMPILE_NO_FLAGS);
         munmap(buffer, size);
         xkb_state = xkb_state_new(xkb_keymap);
+	break;
       case EI_EVENT_KEYBOARD_MODIFIERS:
         uint32_t group = ei_event_keyboard_get_xkb_group(event);
         xkb_state_update_mask(xkb_state,
