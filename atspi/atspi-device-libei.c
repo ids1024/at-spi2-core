@@ -94,6 +94,22 @@ static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
   return TRUE;
 }
 
+static gboolean
+atspi_device_libei_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
+{
+  printf("GRAB(%d, %d)\n", kd->keycode, kd->modifiers);
+
+  return TRUE;
+}
+
+static void
+atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
+{
+  AtspiKeyDefinition *kd;
+  kd = atspi_device_get_grab_by_id (device, id);
+  printf("UNGRAB(%d, %d)\n", kd->keycode, kd->modifiers);
+}
+
 static void
 atspi_device_libei_init (AtspiDeviceLibei *device)
 {
@@ -109,6 +125,10 @@ atspi_device_libei_init (AtspiDeviceLibei *device)
 static void
 atspi_device_libei_class_init (AtspiDeviceLibeiClass *klass)
 {
+  AtspiDeviceClass *device_class = ATSPI_DEVICE_CLASS (klass);
+
+  device_class->add_key_grab = atspi_device_libei_add_key_grab;
+  device_class->remove_key_grab = atspi_device_libei_remove_key_grab;
 }
 
 AtspiDeviceLibei *
