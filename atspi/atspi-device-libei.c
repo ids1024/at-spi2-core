@@ -287,8 +287,14 @@ atspi_device_libei_unmap_modifier (AtspiDevice *device, gint keycode)
 static guint
 atspi_device_libei_get_modifier (AtspiDevice *device, gint keycode)
 {
-        printf("get_modifier: %d\n", keycode);
-        return 0;
+  printf("get_modifier: %d\n", keycode);
+
+  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+
+  // TODO: non-virtual
+
+  return find_virtual_mapping (libei_device, keycode);
 }
 
 static guint
