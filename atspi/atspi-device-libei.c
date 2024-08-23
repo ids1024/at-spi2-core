@@ -26,6 +26,7 @@
 #include "glib-unix.h"
 
 #include <libei.h>
+#include <poll.h>
 #include <sys/mman.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -185,22 +186,24 @@ static void
 atspi_device_libei_init (AtspiDeviceLibei *device)
 {
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
-
-  priv->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-  // XXX
-  struct xkb_rule_names names = {
-    .rules = "",
-    .model = "pc105",
-    .layout = "us",
-    .variant = "",
-    .options = "",
-  };
-  priv->xkb_keymap = xkb_keymap_new_from_names(priv->xkb_context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
-
   priv->ei = ei_new_receiver(NULL);
   // TODO secure way to pass socket
   ei_setup_backend_socket(priv->ei, "/tmp/atspi-ei-kb.socket");
-  priv->source_id = g_unix_fd_add(ei_get_fd(priv->ei), G_IO_IN, dispatch, device);
+  int fd = ei_get_fd(priv->ei);
+
+  priv->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+
+  // Block until keymap received, so it can be used by vfuncs
+  struct pollfd pollfd = {
+    .fd = fd,
+    .events = POLLIN,
+  };
+  while (!priv->xkb_keymap) {
+    poll(&pollfd, 1, -1);
+    dispatch(fd, G_IO_IN, device);
+  }
+
+  priv->source_id = g_unix_fd_add(fd, G_IO_IN, dispatch, device);
 }
 
 static void
