@@ -22,6 +22,7 @@
 
 #include "atspi-device.h"
 #include "atspi-device-legacy.h"
+#include "atspi-device-libei.h"
 #include "atspi-device-x11.h"
 #include "atspi-private.h"
 
@@ -103,7 +104,7 @@ atspi_device_new ()
     return ATSPI_DEVICE (atspi_device_x11_new ());
 #endif
 
-  return ATSPI_DEVICE (atspi_device_legacy_new ());
+  return ATSPI_DEVICE (atspi_device_libei_new ()); // XXX
 }
 
 static gboolean
