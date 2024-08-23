@@ -22,6 +22,7 @@
  */
 
 #include "atspi-device-libei.h"
+#include "glib-unix.h"
 
 #include <libei.h>
 #include <sys/mman.h>
@@ -30,32 +31,19 @@
 typedef struct _AtspiDeviceLibeiPrivate AtspiDeviceLibeiPrivate;
 struct _AtspiDeviceLibeiPrivate
 {
-  GSource *source;
   struct ei *ei;
+  int source_id;
 };
-
-typedef struct _EiSource
-{
-  GSource source;
-
-  GPollFD event_poll_fd;
-} EiSource;
 
 G_DEFINE_TYPE_WITH_CODE (AtspiDeviceLibei, atspi_device_libei, ATSPI_TYPE_DEVICE, G_ADD_PRIVATE (AtspiDeviceLibei))
 
-// TODO
-static GSourceFuncs event_funcs = {
-  NULL,
-  NULL,
-  NULL,
-  NULL
-};
-
-static gboolean
-do_event_dispatch (gpointer user_data)
-{
+static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
   AtspiDeviceLibei *device = user_data;
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+
+  if (!(condition & G_IO_IN))
+    return TRUE;
+
   struct ei_event *event;
 
   ei_dispatch(priv->ei);
@@ -110,16 +98,8 @@ atspi_device_libei_init (AtspiDeviceLibei *device)
   priv->ei = ei_new_receiver(NULL);
   ei_setup_backend_socket(priv->ei, "/tmp/atspi-ei-kb.socket"); // TODO
 
-  GSource *source = g_source_new(&event_funcs, sizeof(EiSource));
-  EiSource *ei_source = (EiSource *) source;
-
-  ei_source->event_poll_fd.fd = ei_get_fd(priv->ei);
-  ei_source->event_poll_fd.events = G_IO_IN;
-
-  g_source_add_poll (source, &ei_source->event_poll_fd);
-  g_source_set_can_recurse (source, TRUE);
-  g_source_set_callback (source, do_event_dispatch, device, NULL);
-  g_source_attach (source, NULL);
+  // TODO remove source on destroy
+  priv->source_id = g_unix_fd_add(ei_get_fd(priv->ei), G_IO_IN, dispatch, device);
 }
 
 static void
