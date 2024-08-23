@@ -172,7 +172,7 @@ static void print_key_definition(AtspiDeviceLibei *libei_device, AtspiKeyDefinit
 
   xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, kd->keycode);
   xkb_keysym_get_name(keysym, name, 32);
-  printf("KeyDefintion(%s,", name);
+  printf("KeyDefintion(%s, [", name);
 
   gboolean first = TRUE;
   for (GSList *l = priv->modifiers; l; l = l->next)
@@ -183,15 +183,13 @@ static void print_key_definition(AtspiDeviceLibei *libei_device, AtspiKeyDefinit
 	  char name[32];
 	  xkb_keysym_get_name(keysym, name, 32);
 	if (!first)
-	  printf(" |");
-        printf(" %s", name);
+	  printf(", ");
+        printf("%s", name);
 	first = FALSE;
       }
     }
 
-  if (first)
-    printf(" None");
-  printf(")\n");
+  printf("])\n");
 
 
 }
@@ -202,6 +200,7 @@ atspi_device_libei_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
   AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
 
+  printf("Grab ");
   print_key_definition(libei_device, kd);
 
   return TRUE;
@@ -210,9 +209,11 @@ atspi_device_libei_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
 static void
 atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
 {
+  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
   AtspiKeyDefinition *kd;
   kd = atspi_device_get_grab_by_id (device, id);
-  printf("UNGRAB(%d, %d)\n", kd->keycode, kd->modifiers);
+  printf("Ungrab ");
+  print_key_definition(libei_device, kd);
 }
 
 static guint
