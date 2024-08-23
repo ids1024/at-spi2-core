@@ -115,6 +115,33 @@ atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
   printf("UNGRAB(%d, %d)\n", kd->keycode, kd->modifiers);
 }
 
+static guint
+atspi_device_libei_map_modifier (AtspiDevice *device, gint keycode)
+{
+        printf("map_modifier %d\n", keycode);
+        return 42;
+}
+
+static void
+atspi_device_libei_unmap_modifier (AtspiDevice *device, gint keycode)
+{
+        printf("unmap_modifier\n");
+}
+
+static guint
+atspi_device_libei_get_modifier (AtspiDevice *device, gint keycode)
+{
+        printf("get_modifier: %d\n", keycode);
+        return 0;
+}
+
+static guint
+atspi_device_libei_get_locked_modifiers (AtspiDevice *device)
+{
+        printf("get locked modifiers\n");
+        return 0;
+}
+
 static void
 atspi_device_libei_generate_mouse_event (AtspiDevice *device, AtspiAccessible *obj, gint x, gint y, const gchar *name, GError **error)
 {
@@ -184,6 +211,10 @@ atspi_device_libei_class_init (AtspiDeviceLibeiClass *klass)
 
   device_class->add_key_grab = atspi_device_libei_add_key_grab;
   device_class->remove_key_grab = atspi_device_libei_remove_key_grab;
+  device_class->map_modifier = atspi_device_libei_map_modifier;
+  device_class->unmap_modifier = atspi_device_libei_unmap_modifier;
+  device_class->get_modifier = atspi_device_libei_get_modifier;
+  device_class->get_locked_modifiers = atspi_device_libei_get_locked_modifiers;
   device_class->generate_mouse_event = atspi_device_libei_generate_mouse_event;
   object_class->finalize = atspi_device_libei_finalize;
 }
