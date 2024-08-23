@@ -33,6 +33,8 @@ struct _AtspiDeviceLibeiPrivate
 {
   struct ei *ei;
   int source_id;
+  struct xkb_keymap *xkb_keymap;
+  struct xkb_state *xkb_state;
 };
 
 G_DEFINE_TYPE_WITH_CODE (AtspiDeviceLibei, atspi_device_libei, ATSPI_TYPE_DEVICE, G_ADD_PRIVATE (AtspiDeviceLibei))
@@ -44,21 +46,14 @@ static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
   if (!(condition & G_IO_IN))
     return TRUE;
 
-  printf("DISPATCH\n");
 
   struct ei_event *event;
 
   ei_dispatch(priv->ei);
 
-  struct xkb_context *xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-  struct xkb_keymap *xkb_keymap = NULL;
-  struct xkb_state *xkb_state = NULL;
-
   while ((event = ei_get_event(priv->ei)) != NULL) {
-    printf("EVENT %d\n", ei_event_get_type(event));
     switch (ei_event_get_type(event)) {
       case EI_EVENT_SEAT_ADDED:
-        printf("BIND\n");
 	ei_seat_bind_capabilities(ei_event_get_seat(event), EI_DEVICE_CAP_KEYBOARD, NULL);
 	break;
       // TODO multiple devices
@@ -68,25 +63,26 @@ static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
         int fd = ei_keymap_get_fd(keymap);
         size_t size = ei_keymap_get_size(keymap);
         char *buffer = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
-        xkb_keymap = xkb_keymap_new_from_buffer(xkb_context, buffer, size, format, XKB_KEYMAP_COMPILE_NO_FLAGS);
+  	struct xkb_context *xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+        priv->xkb_keymap = xkb_keymap_new_from_buffer(xkb_context, buffer, size, format, XKB_KEYMAP_COMPILE_NO_FLAGS);
         munmap(buffer, size);
-        xkb_state = xkb_state_new(xkb_keymap);
+        priv->xkb_state = xkb_state_new(priv->xkb_keymap);
 	break;
       case EI_EVENT_KEYBOARD_MODIFIERS:
         uint32_t group = ei_event_keyboard_get_xkb_group(event);
-        xkb_state_update_mask(xkb_state,
+        xkb_state_update_mask(priv->xkb_state,
             ei_event_keyboard_get_xkb_mods_depressed(event),
             ei_event_keyboard_get_xkb_mods_latched(event),
             ei_event_keyboard_get_xkb_mods_locked(event),
             group, group, group);
         break;
       case EI_EVENT_KEYBOARD_KEY:
-        uint32_t keycode = ei_event_keyboard_get_key(event);
+        uint32_t keycode = ei_event_keyboard_get_key(event) + 8;
         bool pressed = ei_event_keyboard_get_key_is_press(event);
-        int keysym = xkb_state_key_get_one_sym(xkb_state, keycode);
-        xkb_mod_mask_t modifiers = xkb_state_serialize_mods(xkb_state, XKB_STATE_MODS_EFFECTIVE);
+        int keysym = xkb_state_key_get_one_sym(priv->xkb_state, keycode);
+        xkb_mod_mask_t modifiers = xkb_state_serialize_mods(priv->xkb_state, XKB_STATE_MODS_EFFECTIVE);
         gchar text[16];
-        xkb_state_key_get_utf8(xkb_state, keycode, text, 16);
+        xkb_state_key_get_utf8(priv->xkb_state, keycode, text, 16);
         atspi_device_notify_key (ATSPI_DEVICE (device), pressed, keycode, keysym, modifiers, text);
         break;
       default:
