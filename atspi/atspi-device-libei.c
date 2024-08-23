@@ -265,7 +265,23 @@ atspi_device_libei_map_modifier (AtspiDevice *device, gint keycode)
 static void
 atspi_device_libei_unmap_modifier (AtspiDevice *device, gint keycode)
 {
-        printf("unmap_modifier\n");
+  printf("unmap_modifier\n");
+
+  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+
+  GSList *l;
+
+  for (l = priv->modifiers; l; l = l->next)
+    {
+      AtspiLibeiKeyModifier *entry = l->data;
+      if (entry->keycode == keycode)
+        {
+          priv->modifiers = g_slist_remove (priv->modifiers, entry);
+          g_free (entry);
+          return;
+        }
+    }
 }
 
 static guint
