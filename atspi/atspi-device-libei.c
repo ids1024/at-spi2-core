@@ -172,7 +172,7 @@ static void print_key_definition(AtspiDeviceLibei *libei_device, AtspiKeyDefinit
 
   xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, kd->keycode);
   xkb_keysym_get_name(keysym, name, 32);
-  printf("KeyDefintion(%s, [", name);
+  printf("KeyDefintion([");
 
   gboolean first = TRUE;
   for (GSList *l = priv->modifiers; l; l = l->next)
@@ -188,10 +188,20 @@ static void print_key_definition(AtspiDeviceLibei *libei_device, AtspiKeyDefinit
 	first = FALSE;
       }
     }
+  printf("], [");
 
-  printf("])\n");
-
-
+  int real_mods = kd->modifiers & ~ATSPI_VIRTUAL_MODIFIER_MASK;
+  first = TRUE;
+  int n_mods = xkb_keymap_num_mods(priv->xkb_keymap);
+  for (int i = 0; i < n_mods; i++) {
+    if (real_mods & (2 << i)) {
+      if (!first)
+        printf(", ");
+      printf("%s", xkb_keymap_mod_get_name(priv->xkb_keymap, i));
+      first = FALSE;
+    }
+  }
+  printf("], %s)\n", name);
 }
 
 static gboolean
