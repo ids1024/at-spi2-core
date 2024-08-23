@@ -33,6 +33,7 @@ struct _AtspiDeviceLibeiPrivate
 {
   struct ei *ei;
   int source_id;
+  struct xkb_context *xkb_context;
   struct xkb_keymap *xkb_keymap;
   struct xkb_state *xkb_state;
 };
@@ -63,8 +64,7 @@ static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
         int fd = ei_keymap_get_fd(keymap);
         size_t size = ei_keymap_get_size(keymap);
         char *buffer = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
-  	struct xkb_context *xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-        priv->xkb_keymap = xkb_keymap_new_from_buffer(xkb_context, buffer, size, format, XKB_KEYMAP_COMPILE_NO_FLAGS);
+        priv->xkb_keymap = xkb_keymap_new_from_buffer(priv->xkb_context, buffer, size, format, XKB_KEYMAP_COMPILE_NO_FLAGS);
         munmap(buffer, size);
         priv->xkb_state = xkb_state_new(priv->xkb_keymap);
 	break;
@@ -97,7 +97,11 @@ static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
 static gboolean
 atspi_device_libei_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
 {
-  printf("GRAB(%d, %d)\n", kd->keycode, kd->modifiers);
+  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+
+  const char *keycode_name = xkb_keymap_key_get_name(priv->xkb_keymap, kd->keycode);
+  printf("GRAB(%d [%s], %d)\n", kd->keycode, keycode_name, kd->modifiers);
 
   return TRUE;
 }
@@ -125,10 +129,20 @@ atspi_device_libei_init (AtspiDeviceLibei *device)
 {
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
 
-  priv->ei = ei_new_receiver(NULL);
-  ei_setup_backend_socket(priv->ei, "/tmp/atspi-ei-kb.socket"); // TODO
+  priv->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+  // XXX
+  struct xkb_rule_names names = {
+    .rules = "",
+    .model = "pc105",
+    .layout = "us",
+    .variant = "",
+    .options = "",
+  };
+  priv->xkb_keymap = xkb_keymap_new_from_names(priv->xkb_context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
 
-  // TODO remove source on destroy
+  priv->ei = ei_new_receiver(NULL);
+  // TODO secure way to pass socket
+  ei_setup_backend_socket(priv->ei, "/tmp/atspi-ei-kb.socket");
   priv->source_id = g_unix_fd_add(ei_get_fd(priv->ei), G_IO_IN, dispatch, device);
 }
 
