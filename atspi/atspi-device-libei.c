@@ -30,6 +30,8 @@
 #include <sys/mman.h>
 #include <xkbcommon/xkbcommon.h>
 
+#define ATSPI_VIRTUAL_MODIFIER_MASK 0x0000f000
+
 typedef struct _AtspiDeviceLibeiPrivate AtspiDeviceLibeiPrivate;
 struct _AtspiDeviceLibeiPrivate
 {
@@ -38,9 +40,66 @@ struct _AtspiDeviceLibeiPrivate
   struct xkb_context *xkb_context;
   struct xkb_keymap *xkb_keymap;
   struct xkb_state *xkb_state;
+  GSList *modifiers;
 };
 
 G_DEFINE_TYPE_WITH_CODE (AtspiDeviceLibei, atspi_device_libei, ATSPI_TYPE_DEVICE, G_ADD_PRIVATE (AtspiDeviceLibei))
+
+typedef struct
+{
+  guint keycode;
+  guint modifier;
+} AtspiLibeiKeyModifier;
+
+static guint
+find_virtual_mapping (AtspiDeviceLibei *libei_device, gint keycode)
+{
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  GSList *l;
+
+  for (l = priv->modifiers; l; l = l->next)
+    {
+      AtspiLibeiKeyModifier *entry = l->data;
+      if (entry->keycode == keycode)
+        return entry->modifier;
+    }
+
+  return 0;
+}
+
+static gboolean
+check_virtual_modifier (AtspiDeviceLibei *libei_device, guint modifier)
+{
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  GSList *l;
+
+  if (modifier == (1 << ATSPI_MODIFIER_NUMLOCK))
+    return TRUE;
+
+  for (l = priv->modifiers; l; l = l->next)
+    {
+      AtspiLibeiKeyModifier *entry = l->data;
+      if (entry->modifier == modifier)
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
+static guint
+get_unused_virtual_modifier (AtspiDeviceLibei *libei_device)
+{
+  guint ret = 0x1000;
+
+  while (ret < 0x10000)
+    {
+      if (!check_virtual_modifier (libei_device, ret))
+        return ret;
+      ret <<= 1;
+    }
+
+  return 0;
+}
 
 static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
   AtspiDeviceLibei *device = user_data;
@@ -96,14 +155,54 @@ static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
   return TRUE;
 }
 
+xkb_keysym_t keycode_to_keysym(struct xkb_keymap *xkb_keymap, gint keycode) {
+  const xkb_keysym_t *syms;
+  // XXX layout?
+  xkb_keymap_key_get_syms_by_level(xkb_keymap, keycode, 0, 0, &syms);
+  if (syms)
+    return syms[0];
+  else
+    return XKB_KEY_NoSymbol;
+}
+
+// TODO debugging function
+static void print_key_definition(AtspiDeviceLibei *libei_device, AtspiKeyDefinition *kd) {
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  char name[32];
+
+  xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, kd->keycode);
+  xkb_keysym_get_name(keysym, name, 32);
+  printf("KeyDefintion(%s,", name);
+
+  gboolean first = TRUE;
+  for (GSList *l = priv->modifiers; l; l = l->next)
+    {
+      AtspiLibeiKeyModifier *entry = l->data;
+      if (entry->modifier & kd->modifiers) {
+	xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, entry->keycode);
+	  char name[32];
+	  xkb_keysym_get_name(keysym, name, 32);
+	if (!first)
+	  printf(" |");
+        printf(" %s", name);
+	first = FALSE;
+      }
+    }
+
+  if (first)
+    printf(" None");
+  printf(")\n");
+
+
+}
+
 static gboolean
 atspi_device_libei_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
 {
   AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
 
-  const char *keycode_name = xkb_keymap_key_get_name(priv->xkb_keymap, kd->keycode);
-  printf("GRAB(%d [%s], %d)\n", kd->keycode, keycode_name, kd->modifiers);
+  print_key_definition(libei_device, kd);
 
   return TRUE;
 }
@@ -119,8 +218,25 @@ atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
 static guint
 atspi_device_libei_map_modifier (AtspiDevice *device, gint keycode)
 {
-        printf("map_modifier %d\n", keycode);
-        return 42;
+  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  guint ret;
+  AtspiLibeiKeyModifier *entry;
+
+  const xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, keycode);
+
+  ret = find_virtual_mapping (libei_device, keycode);
+  if (ret)
+    return ret;
+
+  ret = get_unused_virtual_modifier (libei_device);
+
+  entry = g_new (AtspiLibeiKeyModifier, 1);
+  entry->keycode = keycode;
+  entry->modifier = ret;
+  priv->modifiers = g_slist_append (priv->modifiers, entry);
+
+  return ret;
 }
 
 static void
