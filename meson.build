@@ -163,6 +163,7 @@ if x11_dep.found()
 endif
 
 libei_dep = dependency('libei-1.0')
+wayland_client_dep = dependency('wayland-client')
 xkbcommon_dep = dependency('xkbcommon')
 
 # Alignments

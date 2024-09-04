@@ -26,6 +26,7 @@ atspi_sources = [
   'atspi-table-cell.c',
   'atspi-text.c',
   'atspi-value.c',
+  'cosmic-atspi.c',
 ]
 
 atspi_headers = [
@@ -101,7 +102,7 @@ atspi = library('atspi', atspi_sources + atspi_enums + atspi_marshals,
                        version: soversion,
                        soversion: soversion.split('.')[0],
                        include_directories: [ root_inc, registryd_inc ],
-                       dependencies: [ libdbus_dep, gobject_dep, gio_dep, dbind_dep, x11_deps, libei_dep, xkbcommon_dep, ],
+                       dependencies: [ libdbus_dep, gobject_dep, gio_dep, dbind_dep, x11_deps, libei_dep, wayland_client_dep, xkbcommon_dep, ],
                        install: true)
 
 atspi_dep = declare_dependency(link_with: atspi,

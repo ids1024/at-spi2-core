@@ -25,9 +25,12 @@
 #include "atspi-private.h"
 #include "glib-unix.h"
 
+#include "cosmic-atspi.h"
+
 #include <libei.h>
 #include <poll.h>
 #include <sys/mman.h>
+#include <wayland-client.h>
 #include <xkbcommon/xkbcommon.h>
 
 #define ATSPI_VIRTUAL_MODIFIER_MASK 0x0000f000
@@ -35,6 +38,8 @@
 typedef struct _AtspiDeviceLibeiPrivate AtspiDeviceLibeiPrivate;
 struct _AtspiDeviceLibeiPrivate
 {
+  struct wl_display *wl_display;
+  struct cosmic_atspi_manager_v1 *atspi_manager;
   struct ei *ei;
   int source_id;
   struct xkb_context *xkb_context;
@@ -165,6 +170,25 @@ xkb_keysym_t keycode_to_keysym(struct xkb_keymap *xkb_keymap, gint keycode) {
     return XKB_KEY_NoSymbol;
 }
 
+static void convert_mods_to_wl(AtspiDeviceLibei *libei_device, guint mods, uint32_t *real_mods, struct wl_array *virtual_mods) {
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+
+  wl_array_init(virtual_mods);
+
+  for (GSList *l = priv->modifiers; l; l = l->next)
+    {
+      AtspiLibeiKeyModifier *entry = l->data;
+      if (entry->modifier & mods) {
+        uint32_t keycode = entry->keycode;
+        void *keycode_ptr = wl_array_add(virtual_mods, 4);
+	if (keycode_ptr != NULL)
+	    memcpy(keycode_ptr, &keycode, 4);
+      }
+    }
+
+  *real_mods = mods & ~ATSPI_VIRTUAL_MODIFIER_MASK;
+}
+
 // TODO debugging function
 static void print_key_definition(AtspiDeviceLibei *libei_device, AtspiKeyDefinition *kd) {
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
@@ -213,6 +237,13 @@ atspi_device_libei_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
   printf("Grab ");
   print_key_definition(libei_device, kd);
 
+  uint32_t real_mods;
+  struct wl_array virtual_mods;
+  convert_mods_to_wl(libei_device, kd->modifiers, &real_mods, &virtual_mods);
+  cosmic_atspi_manager_v1_add_key_grab(priv->atspi_manager, real_mods, &virtual_mods, kd->keycode);
+  wl_display_flush(priv->wl_display);
+  wl_array_release(&virtual_mods);
+
   return TRUE;
 }
 
@@ -220,10 +251,20 @@ static void
 atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
 {
   AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+
   AtspiKeyDefinition *kd;
   kd = atspi_device_get_grab_by_id (device, id);
+
   printf("Ungrab ");
   print_key_definition(libei_device, kd);
+
+  uint32_t real_mods;
+  struct wl_array virtual_mods;
+  convert_mods_to_wl(libei_device, kd->modifiers, &real_mods, &virtual_mods);
+  cosmic_atspi_manager_v1_remove_key_grab(priv->atspi_manager, real_mods, &virtual_mods, kd->keycode);
+  wl_display_flush(priv->wl_display);
+  wl_array_release(&virtual_mods);
 }
 
 static gboolean
@@ -348,13 +389,61 @@ atspi_device_libei_finalize (GObject *object)
   // TODO xkb, parent class
 }
 
+void cosmic_atspi_handle_key_events_eis(void *data,
+		       struct cosmic_atspi_manager_v1 *cosmic_atspi_manager_v1,
+		       int32_t fd) {
+  AtspiDeviceLibei *device = data;
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+
+  priv->ei = ei_new_receiver(NULL);
+  ei_setup_backend_fd(priv->ei, fd);
+  printf("key-events\n");
+}
+
+static const struct cosmic_atspi_manager_v1_listener cosmic_atspi_listener = {
+	cosmic_atspi_handle_key_events_eis
+};
+
+static void
+registry_handle_global(void *data, struct wl_registry *registry,
+                       uint32_t name, const char *interface, uint32_t version) {
+  AtspiDeviceLibei *device = data;
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+
+  if (strcmp(interface, "cosmic_atspi_manager_v1") == 0) {
+    priv->atspi_manager = wl_registry_bind(registry, name, &cosmic_atspi_manager_v1_interface, 1);
+    cosmic_atspi_manager_v1_add_listener(priv->atspi_manager, &cosmic_atspi_listener, data);
+  }
+}
+
+static void
+registry_handle_global_remove(void *data, struct wl_registry *registry,
+                              uint32_t name)
+{ }
+
+static const struct wl_registry_listener registry_listener = {
+   registry_handle_global,
+   registry_handle_global_remove
+};
+
 static void
 atspi_device_libei_init (AtspiDeviceLibei *device)
 {
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
-  priv->ei = ei_new_receiver(NULL);
+
+  priv->wl_display = wl_display_connect(NULL);
+  // TODO error
+  //wl_display_create_queue_with_name(priv->wl_display, "atspi display queue");
+  struct wl_registry *wl_registry = wl_display_get_registry(priv->wl_display);
+  wl_registry_add_listener(wl_registry, &registry_listener, device);
+
+  while (priv->ei == NULL) {
+    wl_display_dispatch(priv->wl_display);
+  }
+
+  //priv->ei = ei_new_receiver(NULL);
   // TODO secure way to pass socket
-  ei_setup_backend_socket(priv->ei, "/tmp/atspi-ei-kb.socket");
+  //ei_setup_backend_socket(priv->ei, "/tmp/atspi-ei-kb.socket");
   int fd = ei_get_fd(priv->ei);
 
   priv->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
@@ -368,6 +457,8 @@ atspi_device_libei_init (AtspiDeviceLibei *device)
     poll(&pollfd, 1, -1);
     dispatch(fd, G_IO_IN, device);
   }
+
+  // TODO add source for wayland socket
 
   priv->source_id = g_unix_fd_add(fd, G_IO_IN, dispatch, device);
 }
