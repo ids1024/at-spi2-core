@@ -270,13 +270,23 @@ atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
 static gboolean
 atspi_device_libei_grab_keyboard (AtspiDevice *device)
 {
+  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+
   printf("Grab keyboard\n");
+
+  cosmic_atspi_manager_v1_grab_keyboard(priv->atspi_manager);
 }
 
 static void
 atspi_device_libei_ungrab_keyboard (AtspiDevice *device)
 {
+  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+
   printf("Ungrab keyboard\n");
+
+  cosmic_atspi_manager_v1_grab_keyboard(priv->atspi_manager);
 }
 
 static guint
