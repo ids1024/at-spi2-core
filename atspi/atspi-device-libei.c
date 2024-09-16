@@ -40,8 +40,9 @@ struct _AtspiDeviceLibeiPrivate
 {
   struct wl_display *wl_display;
   struct cosmic_atspi_manager_v1 *atspi_manager;
+  int wayland_source_id;
   struct ei *ei;
-  int source_id;
+  int ei_source_id;
   struct xkb_context *xkb_context;
   struct xkb_keymap *xkb_keymap;
   struct xkb_state *xkb_state;
@@ -106,13 +107,24 @@ get_unused_virtual_modifier (AtspiDeviceLibei *libei_device)
   return 0;
 }
 
-static gboolean dispatch(gint fd, GIOCondition condition, gpointer user_data) {
+static gboolean dispatch_wayland(gint fd, GIOCondition condition, gpointer user_data) {
   AtspiDeviceLibei *device = user_data;
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
 
   if (!(condition & G_IO_IN))
     return TRUE;
 
+  wl_display_dispatch(priv->wl_display);
+
+  return TRUE;
+}
+
+static gboolean dispatch_libei(gint fd, GIOCondition condition, gpointer user_data) {
+  AtspiDeviceLibei *device = user_data;
+  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+
+  if (!(condition & G_IO_IN))
+    return TRUE;
 
   struct ei_event *event;
 
@@ -393,8 +405,9 @@ atspi_device_libei_finalize (GObject *object)
   AtspiDeviceLibei *device = ATSPI_DEVICE_LIBEI (object);
   AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
 
-  g_source_remove(priv->source_id);
+  g_source_remove(priv->ei_source_id);
   ei_unref(priv->ei);
+  g_source_remove(priv->wayland_source_id);
 
   // TODO xkb, parent class
 }
@@ -451,6 +464,8 @@ atspi_device_libei_init (AtspiDeviceLibei *device)
     wl_display_dispatch(priv->wl_display);
   }
 
+  priv->ei_source_id = g_unix_fd_add(wl_display_get_fd(priv->wl_display), G_IO_IN, dispatch_wayland, device);
+
   //priv->ei = ei_new_receiver(NULL);
   // TODO secure way to pass socket
   //ei_setup_backend_socket(priv->ei, "/tmp/atspi-ei-kb.socket");
@@ -465,12 +480,12 @@ atspi_device_libei_init (AtspiDeviceLibei *device)
   };
   while (!priv->xkb_keymap) {
     poll(&pollfd, 1, -1);
-    dispatch(fd, G_IO_IN, device);
+    dispatch_libei(fd, G_IO_IN, device);
   }
 
   // TODO add source for wayland socket
 
-  priv->source_id = g_unix_fd_add(fd, G_IO_IN, dispatch, device);
+  priv->ei_source_id = g_unix_fd_add(fd, G_IO_IN, dispatch_libei, device);
 }
 
 static void
