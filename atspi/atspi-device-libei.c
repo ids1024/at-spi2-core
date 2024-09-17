@@ -114,7 +114,7 @@ static gboolean dispatch_wayland(gint fd, GIOCondition condition, gpointer user_
   if (!(condition & G_IO_IN))
     return TRUE;
 
-  wl_display_dispatch(priv->wl_display);
+  while (wl_display_dispatch(priv->wl_display) != -1) {}
 
   return TRUE;
 }
@@ -191,7 +191,7 @@ static void convert_mods_to_wl(AtspiDeviceLibei *libei_device, guint mods, uint3
     {
       AtspiLibeiKeyModifier *entry = l->data;
       if (entry->modifier & mods) {
-        uint32_t keycode = entry->keycode;
+        uint32_t keycode = entry->keycode - 8;
         void *keycode_ptr = wl_array_add(virtual_mods, 4);
 	if (keycode_ptr != NULL)
 	    memcpy(keycode_ptr, &keycode, 4);
@@ -252,7 +252,7 @@ atspi_device_libei_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
   uint32_t real_mods;
   struct wl_array virtual_mods;
   convert_mods_to_wl(libei_device, kd->modifiers, &real_mods, &virtual_mods);
-  cosmic_atspi_manager_v1_add_key_grab(priv->atspi_manager, real_mods, &virtual_mods, kd->keycode);
+  cosmic_atspi_manager_v1_add_key_grab(priv->atspi_manager, real_mods, &virtual_mods, kd->keycode - 8);
   wl_display_flush(priv->wl_display);
   wl_array_release(&virtual_mods);
 
@@ -274,7 +274,7 @@ atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
   uint32_t real_mods;
   struct wl_array virtual_mods;
   convert_mods_to_wl(libei_device, kd->modifiers, &real_mods, &virtual_mods);
-  cosmic_atspi_manager_v1_remove_key_grab(priv->atspi_manager, real_mods, &virtual_mods, kd->keycode);
+  cosmic_atspi_manager_v1_remove_key_grab(priv->atspi_manager, real_mods, &virtual_mods, kd->keycode - 8);
   wl_display_flush(priv->wl_display);
   wl_array_release(&virtual_mods);
 }
