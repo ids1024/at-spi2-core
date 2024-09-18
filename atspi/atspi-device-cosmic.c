@@ -288,6 +288,8 @@ atspi_device_cosmic_grab_keyboard (AtspiDevice *device)
   printf("Grab keyboard\n");
 
   cosmic_atspi_manager_v1_grab_keyboard(priv->atspi_manager);
+
+  return TRUE;
 }
 
 static void
@@ -308,8 +310,6 @@ atspi_device_cosmic_map_modifier (AtspiDevice *device, gint keycode)
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
   guint ret;
   AtspiLibeiKeyModifier *entry;
-
-  const xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, keycode);
 
   ret = find_virtual_mapping (libei_device, keycode);
   if (ret)
@@ -353,9 +353,6 @@ atspi_device_cosmic_get_modifier (AtspiDevice *device, gint keycode)
   printf("get_modifier: %d\n", keycode);
 
   AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
-  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
-
-  // TODO: non-virtual
 
   return find_virtual_mapping (libei_device, keycode);
 }
