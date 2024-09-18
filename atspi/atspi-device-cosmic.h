@@ -31,28 +31,28 @@
 
 G_BEGIN_DECLS
 
-#define ATSPI_TYPE_DEVICE_LIBEI (atspi_device_libei_get_type ())
-#define ATSPI_DEVICE_LIBEI(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), ATSPI_TYPE_DEVICE_LIBEI, AtspiDeviceLibei))
-#define ATSPI_DEVICE_LIBEI_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST ((klass), ATSPI_TYPE_DEVICE_LIBEI, AtspiDeviceLibeiClass))
+#define ATSPI_TYPE_DEVICE_LIBEI (atspi_device_cosmic_get_type ())
+#define ATSPI_DEVICE_LIBEI(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), ATSPI_TYPE_DEVICE_LIBEI, AtspiDeviceCosmic))
+#define ATSPI_DEVICE_LIBEI_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST ((klass), ATSPI_TYPE_DEVICE_LIBEI, AtspiDeviceCosmicClass))
 #define ATSPI_IS_DEVICE_LIBEI(obj) (G_TYPE_CHECK_INSTANCE_TYPE ((obj), ATSPI_TYPE_DEVICE_LIBEI))
 #define ATSPI_IS_DEVICE_LIBEI_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), ATSPI_TYPE_DEVICE_LIBEI))
-#define ATSPI_DEVICE_LIBEI_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS ((obj), ATSPI_TYPE_DEVICE_LIBEI, AtspiDeviceLibeiClass))
+#define ATSPI_DEVICE_LIBEI_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS ((obj), ATSPI_TYPE_DEVICE_LIBEI, AtspiDeviceCosmicClass))
 
-typedef struct _AtspiDeviceLibei AtspiDeviceLibei;
-struct _AtspiDeviceLibei
+typedef struct _AtspiDeviceCosmic AtspiDeviceCosmic;
+struct _AtspiDeviceCosmic
 {
   AtspiDevice parent;
 };
 
-typedef struct _AtspiDeviceLibeiClass AtspiDeviceLibeiClass;
-struct _AtspiDeviceLibeiClass
+typedef struct _AtspiDeviceCosmicClass AtspiDeviceCosmicClass;
+struct _AtspiDeviceCosmicClass
 {
   AtspiDeviceClass parent_class;
 };
 
-GType atspi_device_libei_get_type (void);
+GType atspi_device_cosmic_get_type (void);
 
-AtspiDeviceLibei *atspi_device_libei_new ();
+AtspiDeviceCosmic *atspi_device_cosmic_new ();
 
 G_END_DECLS
 

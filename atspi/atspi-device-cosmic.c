@@ -21,7 +21,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include "atspi-device-libei.h"
+#include "atspi-device-cosmic.h"
 #include "atspi-private.h"
 #include "glib-unix.h"
 
@@ -35,8 +35,8 @@
 
 #define ATSPI_VIRTUAL_MODIFIER_MASK 0x0000f000
 
-typedef struct _AtspiDeviceLibeiPrivate AtspiDeviceLibeiPrivate;
-struct _AtspiDeviceLibeiPrivate
+typedef struct _AtspiDeviceCosmicPrivate AtspiDeviceCosmicPrivate;
+struct _AtspiDeviceCosmicPrivate
 {
   struct wl_display *wl_display;
   struct cosmic_atspi_manager_v1 *atspi_manager;
@@ -49,7 +49,7 @@ struct _AtspiDeviceLibeiPrivate
   GSList *modifiers;
 };
 
-G_DEFINE_TYPE_WITH_CODE (AtspiDeviceLibei, atspi_device_libei, ATSPI_TYPE_DEVICE, G_ADD_PRIVATE (AtspiDeviceLibei))
+G_DEFINE_TYPE_WITH_CODE (AtspiDeviceCosmic, atspi_device_cosmic, ATSPI_TYPE_DEVICE, G_ADD_PRIVATE (AtspiDeviceCosmic))
 
 typedef struct
 {
@@ -58,9 +58,9 @@ typedef struct
 } AtspiLibeiKeyModifier;
 
 static guint
-find_virtual_mapping (AtspiDeviceLibei *libei_device, gint keycode)
+find_virtual_mapping (AtspiDeviceCosmic *libei_device, gint keycode)
 {
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
   GSList *l;
 
   for (l = priv->modifiers; l; l = l->next)
@@ -74,9 +74,9 @@ find_virtual_mapping (AtspiDeviceLibei *libei_device, gint keycode)
 }
 
 static gboolean
-check_virtual_modifier (AtspiDeviceLibei *libei_device, guint modifier)
+check_virtual_modifier (AtspiDeviceCosmic *libei_device, guint modifier)
 {
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
   GSList *l;
 
   if (modifier == (1 << ATSPI_MODIFIER_NUMLOCK))
@@ -93,7 +93,7 @@ check_virtual_modifier (AtspiDeviceLibei *libei_device, guint modifier)
 }
 
 static guint
-get_unused_virtual_modifier (AtspiDeviceLibei *libei_device)
+get_unused_virtual_modifier (AtspiDeviceCosmic *libei_device)
 {
   guint ret = 0x1000;
 
@@ -108,8 +108,8 @@ get_unused_virtual_modifier (AtspiDeviceLibei *libei_device)
 }
 
 static gboolean dispatch_wayland(gint fd, GIOCondition condition, gpointer user_data) {
-  AtspiDeviceLibei *device = user_data;
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+  AtspiDeviceCosmic *device = user_data;
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (device);
 
   if (!(condition & G_IO_IN))
     return TRUE;
@@ -120,8 +120,8 @@ static gboolean dispatch_wayland(gint fd, GIOCondition condition, gpointer user_
 }
 
 static gboolean dispatch_libei(gint fd, GIOCondition condition, gpointer user_data) {
-  AtspiDeviceLibei *device = user_data;
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+  AtspiDeviceCosmic *device = user_data;
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (device);
 
   if (!(condition & G_IO_IN))
     return TRUE;
@@ -182,8 +182,8 @@ xkb_keysym_t keycode_to_keysym(struct xkb_keymap *xkb_keymap, gint keycode) {
     return XKB_KEY_NoSymbol;
 }
 
-static void convert_mods_to_wl(AtspiDeviceLibei *libei_device, guint mods, uint32_t *real_mods, struct wl_array *virtual_mods) {
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+static void convert_mods_to_wl(AtspiDeviceCosmic *libei_device, guint mods, uint32_t *real_mods, struct wl_array *virtual_mods) {
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
   wl_array_init(virtual_mods);
 
@@ -202,8 +202,8 @@ static void convert_mods_to_wl(AtspiDeviceLibei *libei_device, guint mods, uint3
 }
 
 // TODO debugging function
-static void print_key_definition(AtspiDeviceLibei *libei_device, AtspiKeyDefinition *kd) {
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+static void print_key_definition(AtspiDeviceCosmic *libei_device, AtspiKeyDefinition *kd) {
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
   char name[32];
 
   xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, kd->keycode);
@@ -241,10 +241,10 @@ static void print_key_definition(AtspiDeviceLibei *libei_device, AtspiKeyDefinit
 }
 
 static gboolean
-atspi_device_libei_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
+atspi_device_cosmic_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
 {
-  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
   printf("Grab ");
   print_key_definition(libei_device, kd);
@@ -260,10 +260,10 @@ atspi_device_libei_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
 }
 
 static void
-atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
+atspi_device_cosmic_remove_key_grab (AtspiDevice *device, guint id)
 {
-  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
   AtspiKeyDefinition *kd;
   kd = atspi_device_get_grab_by_id (device, id);
@@ -280,10 +280,10 @@ atspi_device_libei_remove_key_grab (AtspiDevice *device, guint id)
 }
 
 static gboolean
-atspi_device_libei_grab_keyboard (AtspiDevice *device)
+atspi_device_cosmic_grab_keyboard (AtspiDevice *device)
 {
-  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
   printf("Grab keyboard\n");
 
@@ -291,10 +291,10 @@ atspi_device_libei_grab_keyboard (AtspiDevice *device)
 }
 
 static void
-atspi_device_libei_ungrab_keyboard (AtspiDevice *device)
+atspi_device_cosmic_ungrab_keyboard (AtspiDevice *device)
 {
-  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
   printf("Ungrab keyboard\n");
 
@@ -302,10 +302,10 @@ atspi_device_libei_ungrab_keyboard (AtspiDevice *device)
 }
 
 static guint
-atspi_device_libei_map_modifier (AtspiDevice *device, gint keycode)
+atspi_device_cosmic_map_modifier (AtspiDevice *device, gint keycode)
 {
-  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
   guint ret;
   AtspiLibeiKeyModifier *entry;
 
@@ -326,12 +326,12 @@ atspi_device_libei_map_modifier (AtspiDevice *device, gint keycode)
 }
 
 static void
-atspi_device_libei_unmap_modifier (AtspiDevice *device, gint keycode)
+atspi_device_cosmic_unmap_modifier (AtspiDevice *device, gint keycode)
 {
   printf("unmap_modifier\n");
 
-  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
   GSList *l;
 
@@ -348,12 +348,12 @@ atspi_device_libei_unmap_modifier (AtspiDevice *device, gint keycode)
 }
 
 static guint
-atspi_device_libei_get_modifier (AtspiDevice *device, gint keycode)
+atspi_device_cosmic_get_modifier (AtspiDevice *device, gint keycode)
 {
   printf("get_modifier: %d\n", keycode);
 
-  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
   // TODO: non-virtual
 
@@ -361,17 +361,17 @@ atspi_device_libei_get_modifier (AtspiDevice *device, gint keycode)
 }
 
 static guint
-atspi_device_libei_get_locked_modifiers (AtspiDevice *device)
+atspi_device_cosmic_get_locked_modifiers (AtspiDevice *device)
 {
-  AtspiDeviceLibei *libei_device = ATSPI_DEVICE_LIBEI (device);
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (libei_device);
+  AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
   printf("get locked modifiers\n");
   return xkb_state_serialize_mods(priv->xkb_state, XKB_STATE_MODS_LOCKED);
 }
 
 static void
-atspi_device_libei_generate_mouse_event (AtspiDevice *device, AtspiAccessible *obj, gint x, gint y, const gchar *name, GError **error)
+atspi_device_cosmic_generate_mouse_event (AtspiDevice *device, AtspiAccessible *obj, gint x, gint y, const gchar *name, GError **error)
 {
   AtspiPoint *p;
 
@@ -400,10 +400,10 @@ atspi_device_libei_generate_mouse_event (AtspiDevice *device, AtspiAccessible *o
 }
 
 static void
-atspi_device_libei_finalize (GObject *object)
+atspi_device_cosmic_finalize (GObject *object)
 {
-  AtspiDeviceLibei *device = ATSPI_DEVICE_LIBEI (object);
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+  AtspiDeviceCosmic *device = ATSPI_DEVICE_LIBEI (object);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (device);
 
   g_source_remove(priv->ei_source_id);
   ei_unref(priv->ei);
@@ -415,8 +415,8 @@ atspi_device_libei_finalize (GObject *object)
 void cosmic_atspi_handle_key_events_eis(void *data,
 		       struct cosmic_atspi_manager_v1 *cosmic_atspi_manager_v1,
 		       int32_t fd) {
-  AtspiDeviceLibei *device = data;
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+  AtspiDeviceCosmic *device = data;
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (device);
 
   priv->ei = ei_new_receiver(NULL);
   ei_setup_backend_fd(priv->ei, fd);
@@ -430,8 +430,8 @@ static const struct cosmic_atspi_manager_v1_listener cosmic_atspi_listener = {
 static void
 registry_handle_global(void *data, struct wl_registry *registry,
                        uint32_t name, const char *interface, uint32_t version) {
-  AtspiDeviceLibei *device = data;
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+  AtspiDeviceCosmic *device = data;
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (device);
 
   if (strcmp(interface, "cosmic_atspi_manager_v1") == 0) {
     priv->atspi_manager = wl_registry_bind(registry, name, &cosmic_atspi_manager_v1_interface, 1);
@@ -450,9 +450,9 @@ static const struct wl_registry_listener registry_listener = {
 };
 
 static void
-atspi_device_libei_init (AtspiDeviceLibei *device)
+atspi_device_cosmic_init (AtspiDeviceCosmic *device)
 {
-  AtspiDeviceLibeiPrivate *priv = atspi_device_libei_get_instance_private (device);
+  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (device);
 
   priv->wl_display = wl_display_connect(NULL);
   // TODO error
@@ -489,27 +489,27 @@ atspi_device_libei_init (AtspiDeviceLibei *device)
 }
 
 static void
-atspi_device_libei_class_init (AtspiDeviceLibeiClass *klass)
+atspi_device_cosmic_class_init (AtspiDeviceCosmicClass *klass)
 {
   AtspiDeviceClass *device_class = ATSPI_DEVICE_CLASS (klass);
   GObjectClass *object_class = (GObjectClass *) klass;
 
-  device_class->add_key_grab = atspi_device_libei_add_key_grab;
-  device_class->remove_key_grab = atspi_device_libei_remove_key_grab;
-  device_class->grab_keyboard = atspi_device_libei_grab_keyboard;
-  device_class->ungrab_keyboard = atspi_device_libei_ungrab_keyboard;
-  device_class->map_modifier = atspi_device_libei_map_modifier;
-  device_class->unmap_modifier = atspi_device_libei_unmap_modifier;
-  device_class->get_modifier = atspi_device_libei_get_modifier;
-  device_class->get_locked_modifiers = atspi_device_libei_get_locked_modifiers;
-  device_class->generate_mouse_event = atspi_device_libei_generate_mouse_event;
-  object_class->finalize = atspi_device_libei_finalize;
+  device_class->add_key_grab = atspi_device_cosmic_add_key_grab;
+  device_class->remove_key_grab = atspi_device_cosmic_remove_key_grab;
+  device_class->grab_keyboard = atspi_device_cosmic_grab_keyboard;
+  device_class->ungrab_keyboard = atspi_device_cosmic_ungrab_keyboard;
+  device_class->map_modifier = atspi_device_cosmic_map_modifier;
+  device_class->unmap_modifier = atspi_device_cosmic_unmap_modifier;
+  device_class->get_modifier = atspi_device_cosmic_get_modifier;
+  device_class->get_locked_modifiers = atspi_device_cosmic_get_locked_modifiers;
+  device_class->generate_mouse_event = atspi_device_cosmic_generate_mouse_event;
+  object_class->finalize = atspi_device_cosmic_finalize;
 }
 
-AtspiDeviceLibei *
-atspi_device_libei_new ()
+AtspiDeviceCosmic *
+atspi_device_cosmic_new ()
 {
-  AtspiDeviceLibei *device = g_object_new (atspi_device_libei_get_type (), NULL);
+  AtspiDeviceCosmic *device = g_object_new (atspi_device_cosmic_get_type (), NULL);
 
   return device;
 }
