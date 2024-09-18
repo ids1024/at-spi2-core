@@ -49,6 +49,8 @@ struct _AtspiDeviceCosmicPrivate
   GSList *modifiers;
 };
 
+GObjectClass *device_cosmic_parent_class;
+
 G_DEFINE_TYPE_WITH_CODE (AtspiDeviceCosmic, atspi_device_cosmic, ATSPI_TYPE_DEVICE, G_ADD_PRIVATE (AtspiDeviceCosmic))
 
 typedef struct
@@ -114,7 +116,7 @@ static gboolean dispatch_wayland(gint fd, GIOCondition condition, gpointer user_
   if (!(condition & G_IO_IN))
     return TRUE;
 
-  while (wl_display_dispatch(priv->wl_display) != -1) {}
+  wl_display_dispatch (priv->wl_display);
 
   return TRUE;
 }
@@ -126,6 +128,8 @@ static gboolean dispatch_libei(gint fd, GIOCondition condition, gpointer user_da
   if (!(condition & G_IO_IN))
     return TRUE;
 
+  printf("eis dispatch\n");
+
   struct ei_event *event;
 
   ei_dispatch(priv->ei);
@@ -133,10 +137,12 @@ static gboolean dispatch_libei(gint fd, GIOCondition condition, gpointer user_da
   while ((event = ei_get_event(priv->ei)) != NULL) {
     switch (ei_event_get_type(event)) {
       case EI_EVENT_SEAT_ADDED:
+  	printf("eis seat\n");
 	ei_seat_bind_capabilities(ei_event_get_seat(event), EI_DEVICE_CAP_KEYBOARD, NULL);
 	break;
       // TODO multiple devices
       case EI_EVENT_DEVICE_ADDED:
+	printf("EI device\n");
         struct ei_keymap *keymap = ei_device_keyboard_get_keymap(ei_event_get_device(event));
         int format = ei_keymap_get_type(keymap);
         int fd = ei_keymap_get_fd(keymap);
@@ -150,6 +156,9 @@ static gboolean dispatch_libei(gint fd, GIOCondition condition, gpointer user_da
         priv->xkb_state = xkb_state_new(priv->xkb_keymap);
 	break;
       case EI_EVENT_KEYBOARD_MODIFIERS:
+        if (!priv->xkb_state)
+          continue;
+
         uint32_t group = ei_event_keyboard_get_xkb_group(event);
         xkb_state_update_mask(priv->xkb_state,
             ei_event_keyboard_get_xkb_mods_depressed(event),
@@ -158,6 +167,10 @@ static gboolean dispatch_libei(gint fd, GIOCondition condition, gpointer user_da
             group, group, group);
         break;
       case EI_EVENT_KEYBOARD_KEY:
+        if (!priv->xkb_state)
+          continue;
+
+	printf("EI key\n");
         uint32_t keycode = ei_event_keyboard_get_key(event) + 8;
         bool pressed = ei_event_keyboard_get_key_is_press(event);
         int keysym = xkb_state_key_get_one_sym(priv->xkb_state, keycode);
@@ -208,6 +221,9 @@ static void convert_mods_to_wl(AtspiDeviceCosmic *libei_device, guint mods, uint
 static void print_key_definition(AtspiDeviceCosmic *libei_device, AtspiKeyDefinition *kd) {
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
   char name[32];
+
+  if (priv->xkb_keymap == NULL)
+    return;
 
   xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, kd->keycode);
   xkb_keysym_get_name(keysym, name, 32);
@@ -367,7 +383,10 @@ atspi_device_cosmic_get_locked_modifiers (AtspiDevice *device)
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
   printf("get locked modifiers\n");
-  return xkb_state_serialize_mods(priv->xkb_state, XKB_STATE_MODS_LOCKED);
+  if (priv->xkb_state)
+    return xkb_state_serialize_mods (priv->xkb_state, XKB_STATE_MODS_LOCKED);
+  else
+    return 0;
 }
 
 static void
@@ -405,11 +424,30 @@ atspi_device_cosmic_finalize (GObject *object)
   AtspiDeviceCosmic *device = ATSPI_DEVICE_LIBEI (object);
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (device);
 
-  g_source_remove(priv->ei_source_id);
-  ei_unref(priv->ei);
-  g_source_remove(priv->wayland_source_id);
+  if (priv->xkb_state)
+    xkb_state_unref (priv->xkb_state);
+  if (priv->xkb_keymap)
+    xkb_keymap_unref (priv->xkb_keymap);
+  if (priv->xkb_context)
+    xkb_context_unref (priv->xkb_context);
+
+  g_slist_free_full (priv->modifiers, g_free);
+  priv->modifiers = NULL;
+
+  if (priv->ei_source_id)
+    g_source_remove (priv->ei_source_id);
+  if (priv->ei)
+    ei_unref(priv->ei);
+
+  if (priv->wayland_source_id)
+    g_source_remove (priv->wayland_source_id);
+
+  if (priv->wl_display)
+    wl_display_disconnect (priv->wl_display);
 
   // TODO xkb, parent class
+
+  device_cosmic_parent_class->finalize (object);
 }
 
 void cosmic_atspi_handle_key_events_eis(void *data,
@@ -418,8 +456,10 @@ void cosmic_atspi_handle_key_events_eis(void *data,
   AtspiDeviceCosmic *device = data;
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (device);
 
-  priv->ei = ei_new_receiver(NULL);
-  ei_setup_backend_fd(priv->ei, fd);
+  // TODO error?
+  priv->ei = ei_new_receiver (NULL);
+  ei_setup_backend_fd (priv->ei, fd);
+  priv->ei_source_id = g_unix_fd_add (ei_get_fd (priv->ei), G_IO_IN, dispatch_libei, device);
   printf("key-events\n");
 }
 
@@ -459,30 +499,13 @@ atspi_device_cosmic_init (AtspiDeviceCosmic *device)
   //wl_display_create_queue_with_name(priv->wl_display, "atspi display queue");
   struct wl_registry *wl_registry = wl_display_get_registry(priv->wl_display);
   wl_registry_add_listener(wl_registry, &registry_listener, device);
+  // Roundtrip to bind global
+  wl_display_roundtrip(priv->wl_display);
+  // TODO test that global was bound
 
-  while (priv->ei == NULL) {
-    wl_display_dispatch(priv->wl_display);
-  }
-
-  priv->ei_source_id = g_unix_fd_add(wl_display_get_fd(priv->wl_display), G_IO_IN, dispatch_wayland, device);
-
-  int fd = ei_get_fd(priv->ei);
+  priv->wayland_source_id = g_unix_fd_add(wl_display_get_fd(priv->wl_display), G_IO_IN, dispatch_wayland, device);
 
   priv->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-
-  // Block until keymap received, so it can be used by vfuncs
-  struct pollfd pollfd = {
-    .fd = fd,
-    .events = POLLIN,
-  };
-  while (!priv->xkb_keymap) {
-    poll(&pollfd, 1, -1);
-    dispatch_libei(fd, G_IO_IN, device);
-  }
-
-  // TODO add source for wayland socket
-
-  priv->ei_source_id = g_unix_fd_add(fd, G_IO_IN, dispatch_libei, device);
 }
 
 static void
@@ -491,6 +514,7 @@ atspi_device_cosmic_class_init (AtspiDeviceCosmicClass *klass)
   AtspiDeviceClass *device_class = ATSPI_DEVICE_CLASS (klass);
   GObjectClass *object_class = (GObjectClass *) klass;
 
+  device_cosmic_parent_class = g_type_class_peek_parent (klass);
   device_class->add_key_grab = atspi_device_cosmic_add_key_grab;
   device_class->remove_key_grab = atspi_device_cosmic_remove_key_grab;
   device_class->grab_keyboard = atspi_device_cosmic_grab_keyboard;
