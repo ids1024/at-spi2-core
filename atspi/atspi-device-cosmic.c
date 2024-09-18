@@ -39,6 +39,7 @@ typedef struct _AtspiDeviceCosmicPrivate AtspiDeviceCosmicPrivate;
 struct _AtspiDeviceCosmicPrivate
 {
   struct wl_display *wl_display;
+  struct wl_event_queue *wl_event_queue;
   struct cosmic_atspi_manager_v1 *atspi_manager;
   int wayland_source_id;
   struct ei *ei;
@@ -116,7 +117,7 @@ static gboolean dispatch_wayland(gint fd, GIOCondition condition, gpointer user_
   if (!(condition & G_IO_IN))
     return TRUE;
 
-  wl_display_dispatch (priv->wl_display);
+  wl_display_dispatch_queue (priv->wl_display, priv->wl_event_queue);
 
   return TRUE;
 }
@@ -380,6 +381,8 @@ atspi_device_cosmic_finalize (GObject *object)
   if (priv->wayland_source_id)
     g_source_remove (priv->wayland_source_id);
 
+  if (priv->wl_event_queue)
+    wl_event_queue_destroy (priv->wl_event_queue);
   if (priv->wl_display)
     wl_display_disconnect (priv->wl_display);
 
@@ -433,11 +436,12 @@ atspi_device_cosmic_init (AtspiDeviceCosmic *device)
 
   priv->wl_display = wl_display_connect(NULL);
   // TODO error
-  //wl_display_create_queue_with_name(priv->wl_display, "atspi display queue");
+  priv->wl_event_queue = wl_display_create_queue_with_name (priv->wl_display, "atspi display queue");
   struct wl_registry *wl_registry = wl_display_get_registry(priv->wl_display);
+  wl_proxy_set_queue ((struct wl_proxy *)wl_registry, priv->wl_event_queue);
   wl_registry_add_listener(wl_registry, &registry_listener, device);
   // Roundtrip to bind global
-  wl_display_roundtrip(priv->wl_display);
+  wl_display_roundtrip_queue(priv->wl_display, priv->wl_event_queue);
   // TODO test that global was bound
 
   priv->wayland_source_id = g_unix_fd_add(wl_display_get_fd(priv->wl_display), G_IO_IN, dispatch_wayland, device);
