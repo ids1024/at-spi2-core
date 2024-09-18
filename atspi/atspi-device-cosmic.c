@@ -128,8 +128,6 @@ static gboolean dispatch_libei(gint fd, GIOCondition condition, gpointer user_da
   if (!(condition & G_IO_IN))
     return TRUE;
 
-  printf("eis dispatch\n");
-
   struct ei_event *event;
 
   ei_dispatch(priv->ei);
@@ -137,12 +135,10 @@ static gboolean dispatch_libei(gint fd, GIOCondition condition, gpointer user_da
   while ((event = ei_get_event(priv->ei)) != NULL) {
     switch (ei_event_get_type(event)) {
       case EI_EVENT_SEAT_ADDED:
-  	printf("eis seat\n");
 	ei_seat_bind_capabilities(ei_event_get_seat(event), EI_DEVICE_CAP_KEYBOARD, NULL);
 	break;
       // TODO multiple devices
       case EI_EVENT_DEVICE_ADDED:
-	printf("EI device\n");
         struct ei_keymap *keymap = ei_device_keyboard_get_keymap(ei_event_get_device(event));
         int format = ei_keymap_get_type(keymap);
         int fd = ei_keymap_get_fd(keymap);
@@ -170,7 +166,6 @@ static gboolean dispatch_libei(gint fd, GIOCondition condition, gpointer user_da
         if (!priv->xkb_state)
           continue;
 
-	printf("EI key\n");
         uint32_t keycode = ei_event_keyboard_get_key(event) + 8;
         bool pressed = ei_event_keyboard_get_key_is_press(event);
         int keysym = xkb_state_key_get_one_sym(priv->xkb_state, keycode);
@@ -217,56 +212,11 @@ static void convert_mods_to_wl(AtspiDeviceCosmic *libei_device, guint mods, uint
   *real_mods = mods & ~ATSPI_VIRTUAL_MODIFIER_MASK;
 }
 
-// TODO debugging function
-static void print_key_definition(AtspiDeviceCosmic *libei_device, AtspiKeyDefinition *kd) {
-  AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
-  char name[32];
-
-  if (priv->xkb_keymap == NULL)
-    return;
-
-  xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, kd->keycode);
-  xkb_keysym_get_name(keysym, name, 32);
-  printf("KeyDefintion([");
-
-  gboolean first = TRUE;
-  for (GSList *l = priv->modifiers; l; l = l->next)
-    {
-      AtspiLibeiKeyModifier *entry = l->data;
-      if (entry->modifier & kd->modifiers) {
-	xkb_keysym_t keysym = keycode_to_keysym(priv->xkb_keymap, entry->keycode);
-	  char name[32];
-	  xkb_keysym_get_name(keysym, name, 32);
-	if (!first)
-	  printf(", ");
-        printf("%s", name);
-	first = FALSE;
-      }
-    }
-  printf("], [");
-
-  int real_mods = kd->modifiers & ~ATSPI_VIRTUAL_MODIFIER_MASK;
-  first = TRUE;
-  int n_mods = xkb_keymap_num_mods(priv->xkb_keymap);
-  for (int i = 0; i < n_mods; i++) {
-    if (real_mods & (2 << i)) {
-      if (!first)
-        printf(", ");
-      printf("%s", xkb_keymap_mod_get_name(priv->xkb_keymap, i));
-      first = FALSE;
-    }
-  }
-  printf("], %s)\n", name);
-}
-
 static gboolean
 atspi_device_cosmic_add_key_grab (AtspiDevice *device, AtspiKeyDefinition *kd)
 {
   AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
-
-  printf("Grab ");
-  print_key_definition(libei_device, kd);
 
   uint32_t real_mods;
   struct wl_array virtual_mods;
@@ -287,9 +237,6 @@ atspi_device_cosmic_remove_key_grab (AtspiDevice *device, guint id)
   AtspiKeyDefinition *kd;
   kd = atspi_device_get_grab_by_id (device, id);
 
-  printf("Ungrab ");
-  print_key_definition(libei_device, kd);
-
   uint32_t real_mods;
   struct wl_array virtual_mods;
   convert_mods_to_wl(libei_device, kd->modifiers, &real_mods, &virtual_mods);
@@ -304,8 +251,6 @@ atspi_device_cosmic_grab_keyboard (AtspiDevice *device)
   AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
-  printf("Grab keyboard\n");
-
   cosmic_atspi_manager_v1_grab_keyboard(priv->atspi_manager);
 
   return TRUE;
@@ -316,8 +261,6 @@ atspi_device_cosmic_ungrab_keyboard (AtspiDevice *device)
 {
   AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
-
-  printf("Ungrab keyboard\n");
 
   cosmic_atspi_manager_v1_grab_keyboard(priv->atspi_manager);
 }
@@ -347,8 +290,6 @@ atspi_device_cosmic_map_modifier (AtspiDevice *device, gint keycode)
 static void
 atspi_device_cosmic_unmap_modifier (AtspiDevice *device, gint keycode)
 {
-  printf("unmap_modifier\n");
-
   AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
@@ -369,8 +310,6 @@ atspi_device_cosmic_unmap_modifier (AtspiDevice *device, gint keycode)
 static guint
 atspi_device_cosmic_get_modifier (AtspiDevice *device, gint keycode)
 {
-  printf("get_modifier: %d\n", keycode);
-
   AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
 
   return find_virtual_mapping (libei_device, keycode);
@@ -382,7 +321,6 @@ atspi_device_cosmic_get_locked_modifiers (AtspiDevice *device)
   AtspiDeviceCosmic *libei_device = ATSPI_DEVICE_LIBEI (device);
   AtspiDeviceCosmicPrivate *priv = atspi_device_cosmic_get_instance_private (libei_device);
 
-  printf("get locked modifiers\n");
   if (priv->xkb_state)
     return xkb_state_serialize_mods (priv->xkb_state, XKB_STATE_MODS_LOCKED);
   else
@@ -460,7 +398,6 @@ void cosmic_atspi_handle_key_events_eis(void *data,
   priv->ei = ei_new_receiver (NULL);
   ei_setup_backend_fd (priv->ei, fd);
   priv->ei_source_id = g_unix_fd_add (ei_get_fd (priv->ei), G_IO_IN, dispatch_libei, device);
-  printf("key-events\n");
 }
 
 static const struct cosmic_atspi_manager_v1_listener cosmic_atspi_listener = {
